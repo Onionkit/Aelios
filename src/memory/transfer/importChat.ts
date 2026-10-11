@@ -71,12 +71,15 @@ export function validateChatChunk(value: unknown): { chunk: ChatChunkInput } | {
   if (!Array.isArray(raw.messages) || raw.messages.length === 0) return { error: "chunk.messages must be a non-empty array" };
   if (raw.messages.length > CHAT_CHUNK_MAX_MESSAGES) return { error: `a chunk holds at most ${CHAT_CHUNK_MAX_MESSAGES} messages` };
   const messages: ChatChunkMessageInput[] = [];
+  const seen = new Set<number>();
   let chars = 0;
   for (const item of raw.messages) {
     if (!item || typeof item !== "object") return { error: "each message must be an object" };
     const message = item as Record<string, unknown>;
     const seq = typeof message.seq === "number" && Number.isInteger(message.seq) && message.seq >= 0 ? message.seq : null;
     if (seq === null) return { error: "message.seq must be a non-negative integer" };
+    if (seen.has(seq)) return { error: "message.seq must be unique within a chunk" };
+    seen.add(seq);
     if (message.role !== "user" && message.role !== "assistant") return { error: "message.role must be user or assistant" };
     const content = typeof message.content === "string" ? message.content : "";
     if (!content.trim()) continue;
@@ -94,8 +97,9 @@ export function validateChatChunk(value: unknown): { chunk: ChatChunkInput } | {
   return { chunk: { key, day, messages } };
 }
 
-export async function importedMessageId(importId: string, seq: number): Promise<string> {
-  const hash = await sha256Hex(`${importId}:${seq}`);
+/** 原话的 id：同一批、同一段、同一个序号永远是同一个 id，重跑这段不会多存一份。带上段名，别的客户端每段从 0 编号也不会撞。 */
+export async function importedMessageId(importId: string, chunkKey: string, seq: number): Promise<string> {
+  const hash = await sha256Hex(`${importId}:${chunkKey}:${seq}`);
   return `imsg_${hash.slice(0, 32)}`;
 }
 
@@ -214,7 +218,7 @@ export async function importChatChunk(
     }
   }
 
-  const ids = await Promise.all(chunk.messages.map((message) => importedMessageId(batch.id, message.seq)));
+  const ids = await Promise.all(chunk.messages.map((message) => importedMessageId(batch.id, chunk.key, message.seq)));
   const records = toMessageRecords(namespace, batch.id, chunk, ids);
   const chars = chunk.messages.reduce((sum, message) => sum + message.content.length, 0);
   const extraFactKeys = await listImportPendingFactKeys(env.DB, { namespace, importId: batch.id });

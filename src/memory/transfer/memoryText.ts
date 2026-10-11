@@ -112,12 +112,14 @@ function isPreciousName(name: string): boolean {
 
 function escapeContent(content: string): string {
   // 词首的 # 和所有反引号转义；多个空行并成一个换行 (md 里空行会把条目断开)；续行缩进两格。
-  return content
+  const escaped = content
     .trim()
     .replace(/`/g, "\\`")
     .replace(/(^|\s)#/g, "$1\\#")
     .replace(/\n\s*\n+/g, "\n")
     .replace(/\n/g, "\n  ");
+  // 正文开头像日期、像 [类型]、或是破折号冒号这些分隔符，导回去会被当成条目头吃掉：前面垫一个 \。
+  return /^[[【\\|｜:：,，、—–-]/.test(escaped) || DATE_HEAD_RE.test(escaped) ? `\\${escaped}` : escaped;
 }
 
 function formatTag(tag: string): string | null {
@@ -302,6 +304,8 @@ export function parseEntryText(text: string): {
       rest = rest.slice(typeMatch[0].length).replace(/^[\s|｜:：,，、—–-]+/, "");
     }
   }
+  // 导出时垫在正文前面的 \：后面的字原样是正文。
+  if (rest.startsWith("\\")) rest = rest.slice(1);
 
   // 末尾的 #标签 和 `key`，顺序随意。前面带 \ 的是正文里转义过的，不算。
   const tags: string[] = [];

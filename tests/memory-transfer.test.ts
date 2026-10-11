@@ -9,7 +9,7 @@ import { invalidateSettingsCache } from "../src/gateway/config";
 import { runCandidateJudge } from "../src/memory/candidateJudge";
 import { getMessagesByIds } from "../src/db/messages";
 import { listActiveFactKeys } from "../src/db/v2";
-import { parseMemoryImport } from "../src/memory/transfer/memoryText";
+import { formatMemoriesMarkdown, parseMemoryImport } from "../src/memory/transfer/memoryText";
 import {
   chatApplyRoles,
   chatChunkByDay,
@@ -192,6 +192,16 @@ test("export to md and jsonl, then import the file back unchanged", async () => 
   assert.doesNotMatch(im.body, /望舒空间/);
 });
 
+test("md export keeps text that starts like a date, a [type] or a dash", () => {
+  const contents = ["2025年3月2日 去了医院复查。", "[偏好] 是她自己写的前缀。", "——那天下雨。", "：冒号开头。", "#开头的话", "\\反斜杠开头"];
+  const md = formatMemoriesMarkdown({ namespace: "default", exportedAt: "2026-10-11T00:00:00.000Z", timeZone: "Asia/Shanghai",
+    memories: contents.map((content, index) => ({ id: `m${index}`, type: "event", content, tags: [], fact_key: null,
+      created_at: `2025-03-0${index + 1}T00:00:00.000Z`, updated_at: "2025-03-09T00:00:00.000Z" })) as any,
+    precious: [] });
+  const back = parseMemoryImport(md).entries;
+  assert.deepEqual(back.map((e) => [e.type, e.content]), contents.map((content) => ["event", content]));
+});
+
 test("importing tidied entries: dated, deduplicated, precious, and similar ones go to review", async () => {
   memory("m-exists", "咲咲住在武汉。", "fact:city");
   const text = [
@@ -333,10 +343,15 @@ function chunkOf(day: string, lines: Array<[string, string, number]>) {
 
 test("importing a chat history: by day, through review, quotes kept outside the 7-day messages table", async () => {
   memory("m-coffee", "咲咲喝冰美式。", "preference:coffee");
-  const start = await call("/v1/import/batches?namespace=default", { body: {
-    fingerprint: "chat-1", name: "conversations.json", total_chunks: 2, total_messages: 5, total_chars: 100, first_date: "2025-03-01", last_date: "2025-03-02"
-  } });
-  assert.equal(start.status, 201);
+  // Two tabs starting the same file at once end up on one batch.
+  const startBody = { fingerprint: "chat-1", name: "conversations.json", total_chunks: 2, total_messages: 5, total_chars: 100, first_date: "2025-03-01", last_date: "2025-03-02" };
+  const [start, twin] = await Promise.all([
+    call("/v1/import/batches?namespace=default", { body: startBody }),
+    call("/v1/import/batches?namespace=default", { body: startBody })
+  ]);
+  assert.deepEqual([start.status, twin.status].sort(), [200, 201]);
+  assert.equal(twin.body.data.batch.id, start.body.data.batch.id);
+  assert.equal(all("SELECT * FROM memory_imports").length, 1);
   const batch = start.body.data.batch;
   assert.deepEqual(start.body.data.done_keys, []);
 
@@ -350,7 +365,7 @@ test("importing a chat history: by day, through review, quotes kept outside the 
   // The model sees real ids; patch the placeholder after we know them.
   const firstIds = await Promise.all(day1.messages.map(async (m) => {
     const { importedMessageId } = await import("../src/memory/transfer/importChat");
-    return importedMessageId(batch.id, m.seq);
+    return importedMessageId(batch.id, day1.key, m.seq);
   }));
   extractReplies[0].memories[0].source_message_ids[0] = firstIds[0];
 
@@ -393,7 +408,7 @@ test("importing a chat history: by day, through review, quotes kept outside the 
   const day2 = chunkOf("2025-03-02", [["user", "热拿铁要燕麦奶的", 3], ["assistant", "好", 4]]);
   const secondIds = await Promise.all(day2.messages.map(async (m) => {
     const { importedMessageId } = await import("../src/memory/transfer/importChat");
-    return importedMessageId(batch.id, m.seq);
+    return importedMessageId(batch.id, day2.key, m.seq);
   }));
   extractReplies.push({ memories: [
     { content: "咲咲喝燕麦奶热拿铁。", type: "preference", fact_key: "preference:coffee", tags: ["燕麦奶"], source_message_ids: [secondIds[0]] }

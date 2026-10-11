@@ -134,12 +134,13 @@ export async function upsertImportBatch(
     created_at: now,
     updated_at: now
   };
-  await db
+  const inserted = await db
     .prepare(
       `INSERT INTO memory_imports (
         id, namespace, kind, name, fingerprint, total_chunks, done_chunks, total_messages, total_chars,
         first_date, last_date, candidates, model, model_calls, tokens_in, tokens_out, clef_calls, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, 0, 0, 0, 0, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, 0, 0, 0, 0, ?, ?)
+      ON CONFLICT(namespace, fingerprint) DO NOTHING`
     )
     .bind(
       batch.id,
@@ -157,6 +158,14 @@ export async function upsertImportBatch(
       now
     )
     .run();
+  // 同一份同时点了两次 (两个标签页、重发的请求)：另一个请求刚建好，就接着用它那批。
+  if (!inserted.meta?.changes) {
+    const winner = await db
+      .prepare("SELECT * FROM memory_imports WHERE namespace = ? AND fingerprint = ?")
+      .bind(input.namespace, input.fingerprint)
+      .first<ImportBatchRow>();
+    if (winner) return { batch: winner, doneKeys: [], created: false };
+  }
   return { batch, doneKeys: [], created: true };
 }
 
