@@ -197,6 +197,14 @@ export function chatFromText(text: string): ParsedChat {
     if (accepted.size >= 8 && !known) continue;
     if (known || (count >= 2 && count >= top * 0.05)) accepted.add(name);
   }
+  // 一段很短的聊天里，有人只说了一句：凑不齐两个人时，只出现一次的名字也算。
+  // 长聊天不这么做，正文里「注意：」「地址：」这种行会被当成换人说话。
+  if (accepted.size < 2) {
+    for (const [name] of ranked) {
+      if (accepted.size >= 8) break;
+      accepted.add(name);
+    }
+  }
 
   const messages: ChatMessage[] = [];
   let current: ChatMessage | null = null;

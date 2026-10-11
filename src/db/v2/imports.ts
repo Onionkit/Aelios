@@ -208,7 +208,7 @@ export async function getImportChunk(
 
 /**
  * 记一段做完 (或失败)。同一段重试时状态、候选数覆盖，token 和调用次数累加：失败那次也花了钱。
- * 然后按段表重算批次的合计。
+ * 然后按段表重算批次的合计；候选数按这批真正排进去的条数数，重跑过的段不会算两遍。
  */
 export async function recordImportChunk(
   db: D1Database,
@@ -264,7 +264,7 @@ export async function recordImportChunk(
     .prepare(
       `UPDATE memory_imports SET
          done_chunks = (SELECT COUNT(*) FROM memory_import_chunks WHERE import_id = ? AND status = 'done'),
-         candidates = (SELECT COALESCE(SUM(candidates), 0) FROM memory_import_chunks WHERE import_id = ?),
+         candidates = (SELECT COUNT(*) FROM memory_import_candidates WHERE import_id = ?),
          model_calls = (SELECT COALESCE(SUM(model_calls), 0) FROM memory_import_chunks WHERE import_id = ?),
          tokens_in = (SELECT COALESCE(SUM(tokens_in), 0) FROM memory_import_chunks WHERE import_id = ?),
          tokens_out = (SELECT COALESCE(SUM(tokens_out), 0) FROM memory_import_chunks WHERE import_id = ?),
@@ -402,7 +402,7 @@ function parseIds(value: string | null): string[] {
 }
 
 /**
- * 导入候选入队。同一批里已经有一条还没批的、说的是同一件事 (同 fact_key、指着同一条已有记忆、或正文一样)，
+ * 导入候选入队。同一批里已经有一条还没批的、说的是同一件事 (同 fact_key 或正文一样)，
  * 就并进那一条：正文换成后来这条 (聊天按日期从旧到新送，后来的更新)，出处合在一起。
  * 不然一件事在十天里提了十次，审核页就是十条。
  */
@@ -421,11 +421,11 @@ export async function createImportCandidate(
       `SELECT c.* FROM memory_candidates c
        JOIN memory_import_candidates ic ON ic.candidate_id = c.id
        WHERE ic.import_id = ? AND c.namespace = ? AND c.status = 'pending'
-         AND ((? IS NOT NULL AND c.fact_key = ?) OR (? IS NOT NULL AND c.target_memory_id = ?) OR c.content = ?)
+         AND ((? IS NOT NULL AND c.fact_key = ?) OR c.content = ?)
        ORDER BY c.created_at DESC
        LIMIT 1`
     )
-    .bind(input.importId, input.namespace, factKey, factKey, targetMemoryId, targetMemoryId, input.content)
+    .bind(input.importId, input.namespace, factKey, factKey, input.content)
     .first<MemoryCandidateRow>();
 
   if (existing) {

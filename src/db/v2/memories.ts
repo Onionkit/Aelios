@@ -417,6 +417,8 @@ export async function supersedeMemory(
     sourceMessageIds?: string[];
     authoredBy?: string | null;
     responseTendency?: string | null;
+    /** 新条的 created_at；不给就是现在 (导入的候选批准时给原来那天)。 */
+    createdAt?: string | null;
   }
 ): Promise<{ oldStatus: string; newId: string }> {
   const db = env.DB;
@@ -482,7 +484,7 @@ export async function supersedeMemory(
         effectiveSource,
         JSON.stringify(input.sourceMessageIds ?? []),
         nextVectorId,
-        now,
+        input.createdAt || now,
         now,
         newFactKey,
         eAxis.authoredBy,
@@ -549,7 +551,7 @@ export async function supersedeMemory(
       effectiveSource,
       JSON.stringify(input.sourceMessageIds ?? []),
       nextVectorId,
-      now,
+      input.createdAt || now,
       now,
       newFactKey,
       nextAuthoredBy,

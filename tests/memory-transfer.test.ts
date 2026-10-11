@@ -302,6 +302,31 @@ test("review mode sends every entry to the review page; approving keeps the entr
   assert.ok(created.updated_at > "2026-02-04");
 });
 
+test("two different entries that both look like one memory stay two cards; approving one keeps its day", async () => {
+  memory("m-coffee", "咲咲喝冰美式。", "preference:coffee");
+  similar = { id: "m-coffee", content: "咲咲喝冰美式。", score: 0.97 };
+  const entries = [
+    { content: "咲咲改喝热拿铁了。", type: "preference", date: "2025-11-02" },
+    { content: "咲咲偶尔也喝冷萃。", type: "preference", date: "2025-11-05" }
+  ];
+  const result = await call("/v1/import/entries?namespace=default", { body: { fingerprint: "two", mode: "direct", entries } });
+  assert.equal(result.body.data.counts.queued, 2);
+  const pending = all("SELECT * FROM memory_candidates WHERE status = 'pending' ORDER BY content");
+  assert.deepEqual(pending.map((c) => [c.content, c.target_memory_id]), [
+    ["咲咲偶尔也喝冷萃。", "m-coffee"],
+    ["咲咲改喝热拿铁了。", "m-coffee"]
+  ]);
+
+  const latte = pending.find((c) => c.content === "咲咲改喝热拿铁了。");
+  const approved = await call(`/v1/candidates/${latte.id}/approve?namespace=default`, { body: {} });
+  assert.equal(approved.body.data.action, "superseded");
+  const created = row("memories", approved.body.data.memory_id);
+  assert.equal(created.content, "咲咲改喝热拿铁了。");
+  assert.equal(created.created_at, "2025-11-02T12:00:00.000Z");
+  assert.ok(created.updated_at > "2026-01-01");
+  assert.equal(row("memories", "m-coffee").version_status, "superseded");
+});
+
 function chunkOf(day: string, lines: Array<[string, string, number]>) {
   return { key: `${day}#1`, day, messages: lines.map(([role, content, seq]) => ({ seq, role, content, time: `${day}T10:0${seq % 10}:00.000Z`, speaker: null })) };
 }
@@ -482,6 +507,16 @@ test("chat exports from different apps become the same messages, cut by day", ()
   ]);
   const chunks = chatChunkByDay(roles, { timeZone: "Asia/Shanghai", maxMessages: 3 });
   assert.deepEqual(chunks.map((c) => [c.key, c.messages.length]), [["2025-03-01#1", 3], ["2025-03-01#2", 1], ["2025-03-02#1", 1]]);
+
+  // A short paste where one side speaks only once still has two speakers.
+  for (const sample of ["Bob：hi\nAlice：hello\nAlice：again", "Alice：hello\nBob：hi\nAlice：again"]) {
+    const short = parseChatExport(sample, "short.txt");
+    assert.equal(short.messages.length, 3);
+    assert.deepEqual(short.messages.map((m) => m.content).sort(), ["again", "hello", "hi"]);
+  }
+  // In a longer chat a once-only "名字：" line stays inside the message it belongs to.
+  const longer = parseChatExport("咲咲：地址是\n地址：武汉\n旦九：记下了\n咲咲：好\n旦九：嗯", "long.txt");
+  assert.deepEqual(longer.messages.map((m) => m.content), ["地址是\n地址：武汉", "记下了", "好", "嗯"]);
 });
 
 test("the admin page's copy of the parser runs on its own in a browser-like sandbox", () => {

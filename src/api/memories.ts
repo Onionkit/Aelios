@@ -782,7 +782,8 @@ async function createApprovedMemoryFromCandidate(
       tags: input.tags,
       source: input.source,
       sourceMessageIds: input.sourceMessageIds,
-      reason: "dedup_gate_supersede"
+      reason: "dedup_gate_supersede",
+      createdAt: input.createdAt
     });
     return { id: result.newId, action: "superseded", supersededId: hit.memory.id };
   }
@@ -911,6 +912,12 @@ export async function handleMemoryCandidates(request: Request, env: Env): Promis
       });
     }
 
+    // 导入的候选：新记忆的 created_at 用那天的日期 (聊天那天或条目上写的)，updated_at 照旧是现在。
+    const importDay = isImportCandidateSource(candidate.source)
+      ? await getImportCandidateDay(env.DB, { candidateId: candidate.id })
+      : null;
+    const importCreatedAt = importDay && /^\d{4}-\d{2}-\d{2}$/.test(importDay) ? `${importDay}T12:00:00.000Z` : null;
+
     if (candidate.target_memory_id) {
       const target = await getMemoryById(env.DB, { namespace, id: candidate.target_memory_id });
       const targetActive =
@@ -929,7 +936,8 @@ export async function handleMemoryCandidates(request: Request, env: Env): Promis
           tags,
           source: "review",
           sourceMessageIds,
-          reason: "approve_update"
+          reason: "approve_update",
+          createdAt: importCreatedAt
         });
         const updated = await updateMemoryCandidateStatus(env.DB, {
           namespace,
@@ -952,12 +960,8 @@ export async function handleMemoryCandidates(request: Request, env: Env): Promis
     const fallbackNote = candidate.target_memory_id
       ? `${readString(body.decision_note) || "approved"}; target_gone_fallback`
       : readString(body.decision_note) || "approved";
-    // 导入的候选：新记忆的 created_at 用那天的日期 (聊天那天或条目上写的)，updated_at 照旧是现在。
-    const importDay = isImportCandidateSource(candidate.source)
-      ? await getImportCandidateDay(env.DB, { candidateId: candidate.id })
-      : null;
     const approval = await createApprovedMemoryFromCandidate(env, {
-      createdAt: importDay && /^\d{4}-\d{2}-\d{2}$/.test(importDay) ? `${importDay}T12:00:00.000Z` : null,
+      createdAt: importCreatedAt,
       namespace,
       type,
       content,

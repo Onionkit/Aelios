@@ -255,87 +255,109 @@ export async function importChatChunk(
     targetContent: string | null;
     note: string | null;
   };
-  const planned: Planned[] = [];
-  for (const memory of extracted.memories) {
-    // 出处只认这一段里的消息；模型没标或者标错了，就整段都挂上，审核时至少看得到原文。
-    const own = memory.source_message_ids.filter((id) => chunkIds.has(id));
-    const sources = own.length > 0 ? own : ids;
-    const hit = await findSimilarActiveMemory(env, { namespace, content: memory.content });
-    if (hit && hit.memory.content.trim() === memory.content.trim()) {
-      result.duplicates += 1;
-      continue;
-    }
-    planned.push({
-      memory,
-      sources,
-      targetId: hit?.memory.id ?? null,
-      targetContent: hit?.memory.content ?? null,
-      note: hit ? `import: similar to ${hit.memory.id} (score=${hit.score.toFixed(2)})` : null
-    });
-    for (const id of sources) cited.add(id);
-  }
 
-  // 先存原话再建候选：候选建好了原话没存上，审核页就看不到出处。
-  await saveImportedMessages(
-    env.DB,
-    chunk.messages.flatMap((message, index) =>
-      cited.has(ids[index])
-        ? [
-            {
-              id: ids[index],
-              namespace,
-              importId: batch.id,
-              role: message.role,
-              content: message.content,
-              speaker: message.speaker,
-              createdAt: message.time,
-              day: chunk.day,
-              seq: message.seq
-            }
-          ]
-        : []
-    )
-  );
-
-  for (const item of planned) {
-    let scores: { grounded: number; worth: number } | null = null;
-    if (useClef) {
-      try {
-        const kind = item.targetId ? "update" : "add";
-        const shell = {
-          type: item.memory.type,
-          content: item.memory.content,
-          fact_key: item.memory.fact_key ?? null
-        } as MemoryCandidateRow;
-        const messages = item.sources.flatMap((id) => {
-          const record = recordById.get(id);
-          return record ? [record] : [];
-        });
-        result.clef_calls += 1;
-        scores = await askClefAddScores(env, buildClefInput(kind, shell, messages, input.speakers, item.targetContent));
-      } catch (error) {
-        console.warn("memory import: clef failed", { namespace, key: chunk.key, error: error instanceof Error ? error.message : String(error) });
+  // 抽完以后哪一步出错 (D1 抖了、子请求超了)：这段记成失败，花掉的 token 照记，下次重跑这段。
+  // 已经排进去的候选留着；重跑时同 fact_key、同正文的会并进去。
+  try {
+    const planned: Planned[] = [];
+    for (const memory of extracted.memories) {
+      // 出处只认这一段里的消息；模型没标或者标错了，就整段都挂上，审核时至少看得到原文。
+      const own = memory.source_message_ids.filter((id) => chunkIds.has(id));
+      const sources = own.length > 0 ? own : ids;
+      const hit = await findSimilarActiveMemory(env, { namespace, content: memory.content });
+      if (hit && hit.memory.content.trim() === memory.content.trim()) {
+        result.duplicates += 1;
+        continue;
       }
+      planned.push({
+        memory,
+        sources,
+        targetId: hit?.memory.id ?? null,
+        targetContent: hit?.memory.content ?? null,
+        note: hit ? `import: similar to ${hit.memory.id} (score=${hit.score.toFixed(2)})` : null
+      });
+      for (const id of sources) cited.add(id);
     }
-    const { merged } = await createImportCandidate(env.DB, {
-      namespace,
+
+    // 先存原话再建候选：候选建好了原话没存上，审核页就看不到出处。
+    await saveImportedMessages(
+      env.DB,
+      chunk.messages.flatMap((message, index) =>
+        cited.has(ids[index])
+          ? [
+              {
+                id: ids[index],
+                namespace,
+                importId: batch.id,
+                role: message.role,
+                content: message.content,
+                speaker: message.speaker,
+                createdAt: message.time,
+                day: chunk.day,
+                seq: message.seq
+              }
+            ]
+          : []
+      )
+    );
+
+    for (const item of planned) {
+      let scores: { grounded: number; worth: number } | null = null;
+      if (useClef) {
+        try {
+          const kind = item.targetId ? "update" : "add";
+          const shell = {
+            type: item.memory.type,
+            content: item.memory.content,
+            fact_key: item.memory.fact_key ?? null
+          } as MemoryCandidateRow;
+          const messages = item.sources.flatMap((id) => {
+            const record = recordById.get(id);
+            return record ? [record] : [];
+          });
+          result.clef_calls += 1;
+          scores = await askClefAddScores(env, buildClefInput(kind, shell, messages, input.speakers, item.targetContent));
+        } catch (error) {
+          console.warn("memory import: clef failed", { namespace, key: chunk.key, error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      const { merged } = await createImportCandidate(env.DB, {
+        namespace,
+        importId: batch.id,
+        source: "import_chat",
+        type: item.memory.type,
+        content: item.memory.content,
+        factKey: item.memory.fact_key ?? null,
+        confidence: item.memory.confidence,
+        importance: item.memory.importance,
+        tags: item.memory.tags,
+        sourceMessageIds: item.sources,
+        targetMemoryId: item.targetId,
+        decisionNote: item.note,
+        day: chunk.day,
+        clefGrounded: scores?.grounded ?? null,
+        clefWorth: scores?.worth ?? null
+      });
+      if (merged) result.merged += 1;
+      else result.candidates += 1;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("memory import: chunk failed after extraction", { namespace, key: chunk.key, error: message });
+    await recordImportChunk(env.DB, {
       importId: batch.id,
-      source: "import_chat",
-      type: item.memory.type,
-      content: item.memory.content,
-      factKey: item.memory.fact_key ?? null,
-      confidence: item.memory.confidence,
-      importance: item.memory.importance,
-      tags: item.memory.tags,
-      sourceMessageIds: item.sources,
-      targetMemoryId: item.targetId,
-      decisionNote: item.note,
-      day: chunk.day,
-      clefGrounded: scores?.grounded ?? null,
-      clefWorth: scores?.worth ?? null
+      key: chunk.key,
+      status: "error",
+      messages: records.length,
+      chars,
+      candidates: result.candidates,
+      modelCalls: extracted.calls,
+      tokensIn: extracted.tokensIn,
+      tokensOut: extracted.tokensOut,
+      clefCalls: result.clef_calls,
+      error: message
     });
-    if (merged) result.merged += 1;
-    else result.candidates += 1;
+    return { ...result, status: "error", error: message };
   }
 
   await recordImportChunk(env.DB, {
