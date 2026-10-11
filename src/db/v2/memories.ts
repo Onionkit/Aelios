@@ -853,6 +853,7 @@ export async function listMemoriesUpdatedInRange(
 
 // 梦境收成 (dream harvest)：当天夜里新写入的记忆，不看 status——
 // 当夜出生又被替代的也算新生，状态交给前端展示。
+// 直接导入的记忆 (source=import) 带着原来的日期，不是那晚整理出来的，不算进收成。
 export async function listMemoriesCreatedInRange(
   db: D1Database,
   input: { namespace: string; startIso: string; endIso: string; limit?: number }
@@ -864,6 +865,7 @@ export async function listMemoriesCreatedInRange(
        FROM memories
        WHERE namespace = ?
          AND created_at >= ? AND created_at < ?
+         AND (source IS NULL OR source != 'import')
        ORDER BY created_at DESC
        LIMIT ?`
     )

@@ -165,21 +165,23 @@ export async function countMemoryCandidates(
 }
 
 // 梦境收成 (dream harvest)：当天被判过 (approved / discarded) 的候选，按判决时间倒序。
+// excludeSources：导入的候选不是那晚的梦，收成页不列 (一批批完能有上千条)。
 export async function listJudgedCandidatesInRange(
   db: D1Database,
-  input: { namespace: string; startIso: string; endIso: string; limit?: number }
+  input: { namespace: string; startIso: string; endIso: string; limit?: number; excludeSources?: readonly string[] }
 ): Promise<MemoryCandidateRow[]> {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? 200), 1), 500);
+  const filter = sourceFilterSql({ excludeSources: input.excludeSources });
   const result = await db
     .prepare(
       `SELECT *
        FROM memory_candidates
        WHERE namespace = ? AND status IN ('approved', 'discarded')
-         AND updated_at >= ? AND updated_at < ?
+         AND updated_at >= ? AND updated_at < ?${filter.sql}
        ORDER BY updated_at DESC
        LIMIT ?`
     )
-    .bind(input.namespace, input.startIso, input.endIso, limit)
+    .bind(input.namespace, input.startIso, input.endIso, ...filter.binds, limit)
     .all<MemoryCandidateRow>();
   return result.results ?? [];
 }
