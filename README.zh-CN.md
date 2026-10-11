@@ -102,12 +102,20 @@ GitHub 不会自己更新 Fork。有新版本时：
 | 标签 | 干什么 |
 |---|---|
 | **今日** | 今天聊了什么 |
-| **审核队列** | 夜间整理出来的候选记忆。默认每晚由 Cloudflare 的 clef 审完，这周定下的都列在这里，不对就撤回。设置里关掉 clef 后候选留在这里等你批，也可以让助手用 MCP 自己审 |
-| **重要记忆** | 浏览、搜索、改、删 |
-| **更多** | 珍贵原文、术语表、维护工具 |
+| **审核队列** | 夜间整理出来的候选记忆。默认每晚由 Cloudflare 的 clef 审完，这周定下的都列在这里，不对就撤回。设置里关掉 clef 后候选留在这里等你批，也可以让助手用 MCP 自己审。从别处导进来的单独放在「导入的」一栏，只等你自己点 |
+| **重要记忆** | 浏览、搜索、改、删；被原地改写过的记忆点「旧版」能看到改之前的样子，也能恢复 |
+| **更多** | 珍贵原文、术语表、导入导出、维护工具 |
 | **设置** | 上游、助手、环境参数 |
 
 想让 AI 记住、忘掉、改掉什么，在面板点就行。
+
+### 搬记忆：导出、导入
+
+在「更多 → 导入导出」，每样都按当前选的空间来：
+
+- **导出**：md 或 jsonl。md 一行一条（日期、正文、#标签、反引号里的 key），能直接打开改，改完原样导回来：key 一样的会改写原来那条，旧版留着。
+- **导入整理好的条目**：一行一条，`- 2025-12-15 [偏好] 内容 #标签`，日期、类型、标签都可以省；普通的 md 列表、一段段文字也认。页面上有一段提示词，贴给原来用的 AI，它就按这个格式把记得的事列出来。可以直接写进库（一字不差的跳过，跟库里很像的转去审核），也可以全部先进审核。
+- **导入聊天记录**：认 ChatGPT、Claude 导出的 `conversations.json`、酒馆的 `.jsonl`、「名字：内容」一行一句的文本。文件在页面里拆开、按天切段，一段段交给夜里整理记忆用的那个模型（`DREAM_MODEL`）读，抽出来的只进审核页「导入的」，点了才算数；页面上看得到进度和花了多少 token。原话只存被候选引用的那几句，不进聊天记录表，不受 7 天清理影响，也不会被夜里再整理一遍。页面关了下次选同一个文件接着做。
 
 ## 它实际在做什么
 
@@ -211,7 +219,10 @@ CF 上游：chat 走 compat（全厂商，BYOK）；messages / responses 走各�
 | GET | `/v1/memory_boot` | 冷启动包 |
 | GET | `/v1/diary` `/v1/diary/recent` | 日记 |
 | GET / POST / DELETE | `/v1/precious` `/v1/glossary` | 珍贵原文 / 术语表 |
-| GET / POST | `/v1/candidates` | 审核队列；`/decisions?days=7` 自动决定清单，`/:id/undo` 撤回 |
+| GET / POST | `/v1/candidates` | 审核队列；`?scope=daily` 只要日常整理的，`/decisions?days=7` 自动决定清单，`/:id/undo` 撤回，`/:id/sources` 挂的原话 |
+| GET | `/v1/memories/export?format=md\|jsonl` | 导出当前空间的记忆和珍贵（`memory:read` 就够） |
+| GET | `/v1/memories/:id/revisions` | 这条记忆原地改写前的旧版 |
+| GET / POST | `/v1/import/*` | 导入：`info`、`entries/preview`、`entries`、`batches`、`chat/chunk`、`candidates` |
 
 非 `/health` `/admin` 都要 `Authorization: Bearer <key>`。网关按助手钥匙鉴权，记忆接口按 `memory:read` / `memory:write`。
 

@@ -15,3 +15,5 @@ export * from "./v2/longtail";
 export * from "./v2/candidates";
 export * from "./v2/memories";
 export * from "./v2/logs";
+export * from "./v2/revisions";
+export * from "./v2/imports";

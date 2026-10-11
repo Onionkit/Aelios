@@ -11,6 +11,7 @@ import type {
 import { newId } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { insertMemoryRelation } from "./relations";
+import { saveMemoryRevision } from "./revisions";
 import { SQLITE_BIND_BATCH_SIZE, uniqueStrings } from "./shared";
 
 // 读取一条完整 MemoryRecord 用于向量同步。v2 写完 D1 后用它拿全字段。
@@ -61,6 +62,7 @@ export async function countActiveMemoriesOfType(
 
 // 抽取器判重用：库里已有的 fact_key 列表，防止同一件事被重复造 key。
 // fact_key 存在 memory_lifecycle 侧车表，不在 memories 本体 (见文件头注释)，所以要 join。
+// 导入时没带 key 的条目用内容哈希当 key (import:类型:哈希)，对模型没意义，还会按字母序挤掉真 key，不给。
 export async function listActiveFactKeys(
   db: D1Database,
   input: { namespace: string; limit?: number }
@@ -75,6 +77,7 @@ export async function listActiveFactKeys(
          AND (m.version_status IS NULL OR m.version_status != 'superseded')
          AND COALESCE(m.fact_key, lc.fact_key) IS NOT NULL
          AND COALESCE(m.fact_key, lc.fact_key) != ''
+         AND COALESCE(m.fact_key, lc.fact_key) NOT LIKE 'import:%'
        ORDER BY fact_key
        LIMIT ?`
     )
@@ -165,7 +168,23 @@ export async function fetchMemoryLifecycleRows(
 // 同时写 D1 (本体) 和 Vectorize (检索镜像)，设 vector_id，否则 recall 召不到。
 export async function upsertMemoryByFactKey(
   env: Env,
-  input: { namespace: string; factKey: string; content: string; type?: string; importance?: number; confidence?: number; tags?: string[]; source?: string | null; sourceMessageIds?: string[]; validAsOf?: string | null; authoredBy?: string | null; responseTendency?: string | null }
+  input: {
+    namespace: string;
+    factKey: string;
+    content: string;
+    type?: string;
+    importance?: number;
+    confidence?: number;
+    tags?: string[];
+    source?: string | null;
+    sourceMessageIds?: string[];
+    validAsOf?: string | null;
+    authoredBy?: string | null;
+    responseTendency?: string | null;
+    // 只在新建时用：导入的条目带着原来的日期和置顶。改写已有条目时不动这两样。
+    createdAt?: string | null;
+    pinned?: boolean;
+  }
 ): Promise<{ id: string; created: boolean }> {
   const db = env.DB;
   const now = nowIso();
@@ -188,6 +207,14 @@ export async function upsertMemoryByFactKey(
     .first<{ id: string; authored_by: string | null; response_tendency: string | null }>();
 
   if (existing) {
+    // 原地改写之前先把旧文本存一版，正文没变就不存。
+    await saveMemoryRevision(db, {
+      namespace: input.namespace,
+      memoryId: existing.id,
+      nextContent: input.content,
+      replacedBy: input.source ?? null,
+      reason: "fact_key_upsert"
+    });
     // 更新 memories 本体 (v1 列 + LMC-5 fact_key/version_status)。
     // E 轴两列只在亲手来源时更新；不传就继承已有值 (亲手改内容不该抹掉旧署名)，
     // 与 supersede 的继承原则一致。蒸馏链改写时不碰它们 (亲笔的沿用署名，无主的保持 null)。
@@ -233,6 +260,7 @@ export async function upsertMemoryByFactKey(
   }
 
   // 新增：先插 memories 本体 (v1 列 + vector_id + LMC-5 版本列 + E 轴列)，再插侧车行。
+  // updated_at 永远是现在：过期按 updated_at 算，导入的旧日期只放 created_at，不然一导进来就过期。
   const id = newId("mem");
   const vectorId = `mem_${id}`;
   await db
@@ -241,7 +269,7 @@ export async function upsertMemoryByFactKey(
         id, namespace, type, content, importance, confidence, status, pinned,
         tags, source, source_message_ids, vector_id, created_at, updated_at, expires_at,
         fact_key, version_status, superseded_by, authored_by, response_tendency
-      ) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?, null, ?, 'current', null, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, null, ?, 'current', null, ?, ?)`
     )
     .bind(
       id,
@@ -250,11 +278,12 @@ export async function upsertMemoryByFactKey(
       input.content,
       input.importance ?? 0.6,
       input.confidence ?? 0.8,
+      input.pinned ? 1 : 0,
       JSON.stringify(input.tags ?? []),
       input.source ?? null,
       JSON.stringify(input.sourceMessageIds ?? []),
       vectorId,
-      now,
+      input.createdAt || now,
       now,
       input.factKey,
       eAxis.authoredBy,
@@ -729,6 +758,8 @@ export async function deleteMemoryV2(
   }
 
   await db.prepare("DELETE FROM memory_lifecycle WHERE memory_id = ?").bind(input.id).run();
+  // 改写前留的旧版跟着删，不然「删掉」之后旧文本还在。
+  await db.prepare("DELETE FROM memory_revisions WHERE memory_id = ?").bind(input.id).run();
   await db
     .prepare("DELETE FROM memories WHERE namespace = ? AND id = ?")
     .bind(input.namespace, input.id)

@@ -12,6 +12,8 @@ import {
   getWeeklyLog,
   getMemoryCandidateById,
   getPreciousById,
+  IMPORT_CANDIDATE_SOURCES,
+  isImportCandidateSource,
   listMemoryCandidates,
   markPreciousInjected,
   supersedeMemory,
@@ -975,9 +977,13 @@ async function callTool(
     if (!hasScope(profile, "memory:read")) return toolError("Missing memory:read scope");
     const namespace = resolveNamespace(profile, args.namespace);
     const limit = readPositiveInt(args.limit, 20, 50);
-    // zone_full 是区满了被挡下的，这里批不了，不列。
-    const pending = (await listMemoryCandidates(env.DB, { namespace, status: "pending", limit: 200 }))
-      .filter((candidate) => candidate.source !== "zone_full");
+    // zone_full 是区满了被挡下的，这里批不了，不列。导入的候选等本人在审核页点，也不列。
+    const pending = await listMemoryCandidates(env.DB, {
+      namespace,
+      status: "pending",
+      limit: 200,
+      excludeSources: ["zone_full", ...IMPORT_CANDIDATE_SOURCES]
+    });
     const speakers = await loadSpeakersForNamespace(env, namespace);
     const data = [];
     for (const candidate of pending.slice(0, limit)) {
@@ -1009,6 +1015,9 @@ async function callTool(
     if (candidate.status !== "pending") return toolError(`Candidate was already decided (${candidate.status})`);
     if (decision === "approve" && candidate.source === "zone_full") {
       return toolError("This candidate is held back because its memory zone is full; leave it for the person");
+    }
+    if (isImportCandidateSource(candidate.source)) {
+      return toolError("This candidate came from an import; the person reviews imports themselves on the review page");
     }
     const speakers = await loadSpeakersForNamespace(env, namespace);
     const reviewer = (speakers?.assistantName ?? "").replace(/[\]\r\n]/g, "").trim().slice(0, 32) || "助手";
