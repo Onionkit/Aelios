@@ -106,12 +106,20 @@ Open `/admin`. The bottom tabs:
 | Tab | What it's for |
 |---|---|
 | **Today** | What you talked about today |
-| **Review queue** | Candidate memories consolidated overnight. Cloudflare's clef reviews them every night by default; the week's decisions are listed here with an undo. With clef switched off they wait here, or the assistant reviews them itself over MCP |
-| **Important memories** | Browse, search, edit, delete |
-| **More** | Precious originals, glossary, maintenance tools |
+| **Review queue** | Candidate memories consolidated overnight. Cloudflare's clef reviews them every night by default; the week's decisions are listed here with an undo. With clef switched off they wait here, or the assistant reviews them itself over MCP. Anything imported from elsewhere sits in its own "Imported" tab and waits for you alone |
+| **Important memories** | Browse, search, edit, delete; a memory rewritten in place keeps its earlier versions under "Old versions", where you can restore one |
+| **More** | Precious originals, glossary, import / export, maintenance tools |
 | **Settings** | Upstream, assistants, environment parameters |
 
 Want the AI to remember, forget, or fix something? It's all point-and-click.
+
+### Moving memories: export and import
+
+Under "More → Import / export", each one works on the space you have selected:
+
+- **Export**: md or jsonl. The md has one memory per line (date, text, #tags, the key in backticks); open it, edit it, and import it back as is. A line with the same key rewrites that memory, and the old version is kept.
+- **Import tidied entries**: one per line, `- 2025-12-15 [preference] text #tag`; date, type and tags are optional, and a plain md list or paragraphs work too. The page has a ready prompt to paste into the AI you used before so it lists what it remembers in this format. Entries can go straight in (exact duplicates are skipped, near-duplicates go to review) or all go to review first.
+- **Import a chat history**: ChatGPT and Claude `conversations.json`, SillyTavern `.jsonl`, and plain "Name: text" transcripts. The file is read in the page and cut by day; each day goes through the same model the nightly consolidation uses (`DREAM_MODEL`), and what it finds only lands in the review page's "Imported" tab, where nothing counts until you approve it. Progress and token use are shown as it runs. Only the lines a candidate quotes are kept, outside the chat table, so the 7-day cleanup never removes them and the nightly run never re-reads them. Close the page and pick the same file later to carry on.
 
 ## How it actually works
 
@@ -204,7 +212,10 @@ Configuration has three layers, all under `/admin` Settings: upstream, assistant
 | GET | `/v1/memory_boot` | Cold-start pack |
 | GET | `/v1/diary`, `/v1/diary/recent` | Diary |
 | GET / POST / DELETE | `/v1/precious`, `/v1/glossary` | Precious originals / glossary |
-| GET / POST | `/v1/candidates` | Review queue; `/decisions?days=7` lists automatic decisions, `/:id/undo` reverses one |
+| GET / POST | `/v1/candidates` | Review queue; `?scope=daily` for the nightly ones only, `/decisions?days=7` lists automatic decisions, `/:id/undo` reverses one, `/:id/sources` shows the quoted lines |
+| GET | `/v1/memories/export?format=md\|jsonl` | Export the space's memories and precious lines (`memory:read` is enough) |
+| GET | `/v1/memories/:id/revisions` | Earlier versions of a memory rewritten in place |
+| GET / POST | `/v1/import/*` | Import: `info`, `entries/preview`, `entries`, `batches`, `chat/chunk`, `candidates` |
 
 Everything except `/health` and `/admin` requires `Authorization: Bearer <key>`. The gateway authorizes by assistant key; memory APIs by `memory:read` / `memory:write` scopes.
 
