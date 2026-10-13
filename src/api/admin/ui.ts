@@ -302,7 +302,7 @@ document.documentElement.dataset.theme = localStorage.getItem('aelios.admin.colo
         <i data-lucide="users" class="h-4 w-4 shrink-0 text-zinc-400"></i>
         <span class="min-w-0 flex-1">
           <span class="block text-[11px] text-zinc-500">查看谁的记忆</span>
-          <span class="block truncate text-sm text-zinc-100" :class="identityLoadError ? 'text-coral' : ''" x-text="viewingLabel()"></span>
+          <span class="block truncate text-sm text-zinc-100" :class="identityLoadError || emptySpaceHint() ? 'text-coral' : ''" x-text="viewingLabel()"></span>
         </span>
         <i data-lucide="chevrons-up-down" class="h-4 w-4 shrink-0 text-zinc-500"></i>
       </button>
@@ -351,7 +351,7 @@ document.documentElement.dataset.theme = localStorage.getItem('aelios.admin.colo
         <div class="flex min-w-0 items-center gap-2">
           <button type="button" @click="spaceOpen = true" class="tap flex min-w-0 max-w-[11rem] items-center gap-1.5 rounded-2xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 transition duration-150 ease-in-out active:bg-zinc-800" aria-label="查看谁的记忆">
             <i data-lucide="users" class="h-4 w-4 shrink-0 text-zinc-400"></i>
-            <span class="truncate" :class="identityLoadError ? 'text-coral' : ''" x-text="viewingLabel()"></span>
+            <span class="truncate" :class="identityLoadError || emptySpaceHint() ? 'text-coral' : ''" x-text="viewingLabel()"></span>
             <i data-lucide="chevron-down" class="h-4 w-4 shrink-0 text-zinc-500"></i>
           </button>
           <button type="button" @click="reloadAll()" class="tap rounded-2xl border border-zinc-800 bg-zinc-900 px-3 text-zinc-100 transition duration-150 ease-in-out active:bg-zinc-800" aria-label="刷新">
@@ -1518,11 +1518,15 @@ document.documentElement.dataset.theme = localStorage.getItem('aelios.admin.colo
               <template x-for="idn in memoryIdentities" :key="idn.slug"><option :value="idn.slug" x-text="idn.slug"></option></template>
             </select>
           </label>
-          <label class="text-xs text-zinc-400" x-show="selectedIdentity">空间
-            <select x-model="namespace" @change="switchSpace($event.target.value)" class="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-[#0a0a0b] px-3 text-sm text-zinc-100">
-              <template x-for="space in identitySpaces()" :key="space.name"><option :value="space.name" x-text="space.label"></option></template>
+          <label class="text-xs text-zinc-400">空间
+            <select x-model="namespace" @change="pickSpace($event.target.value)" class="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-[#0a0a0b] px-3 text-sm text-zinc-100">
+              <template x-for="space in pickerSpaces()" :key="space.name"><option :value="space.name" x-text="space.label"></option></template>
             </select>
           </label>
+        </div>
+        <div x-show="emptySpaceHint()" class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-coral/40 bg-[#0a0a0b] p-3">
+          <p class="text-xs leading-5 text-zinc-300" x-text="emptySpaceHint() && emptySpaceHint().text"></p>
+          <button type="button" @click="pickSpace(emptySpaceHint().space)" class="tap shrink-0 rounded-xl border border-coral px-3 text-xs text-coral transition hover:bg-coral hover:text-zinc-950" x-text="emptySpaceHint() && ('看 ' + emptySpaceHint().space)"></button>
         </div>
         <p class="mt-2 text-xs leading-6 text-zinc-400" x-text="spaceDescription()"></p>
         <p class="text-xs leading-6 text-zinc-500">这里切换查看的记忆；客户端使用哪位助手由接入地址和钥匙决定。</p>
@@ -1797,6 +1801,34 @@ function memoryAdmin() {
       return [...new Set([write, ...reads])].map(name => ({ name: name,
         label: name + (name === write ? ' · 写入空间' : ' · 召回空间') }));
     },
+    // 没选助手时列出 default、所有有记忆的空间和正在看的这个，没配助手也能点回装着记忆的空间。
+    pickerSpaces() {
+      if (this.currentIdentity()) return this.identitySpaces();
+      const counts = this.gwSpaces;
+      const names = [...new Set(['default', ...counts.map(space => space.namespace), this.namespace || 'default'])];
+      return names.map(name => {
+        const found = counts.find(space => space.namespace === name);
+        const note = found ? ' · ' + found.memories + ' 条' : counts.length ? ' · 没有记忆' : '';
+        return { name: name, label: name + note };
+      });
+    },
+    pickSpace(name) {
+      const idn = this.currentIdentity();
+      if (idn && this.identitySpaces().some(space => space.name === name)) return this.switchSpace(name);
+      return this.selectCustomSpace(name);
+    },
+    // 正在看的空间没有记忆、别的空间有，就提醒一句（多半是浏览器还记着一个旧空间名）。
+    emptySpaceHint() {
+      const current = this.namespace || 'default';
+      if (this.gwSpaces.some(space => space.namespace === current && space.memories > 0)) return null;
+      const best = this.gwSpaces.find(space => space.memories > 0);
+      if (!best) return null;
+      return { space: best.namespace, text: '「' + current + '」里还没有记忆，' + best.namespace + ' 里有 ' + best.memories + ' 条。' };
+    },
+    async loadSpaces() {
+      // 各空间的记忆条数只用来提醒和列空间，读不到不影响别的。
+      try { this.gwSpaces = (await this.request('/api/gateway/spaces')).spaces || []; } catch { this.gwSpaces = []; }
+    },
     spaceDescription() {
       const idn = this.currentIdentity();
       if (!idn) return '当前查看：' + this.namespace;
@@ -2028,8 +2060,7 @@ function memoryAdmin() {
             _open: false
           };
         });
-        // 各空间的记忆条数只用来提醒，读不到不影响别的。
-        try { this.gwSpaces = (await this.request('/api/gateway/spaces')).spaces || []; } catch { this.gwSpaces = []; }
+        await this.loadSpaces();
         const envData = await this.request('/api/gateway/env');
         (envData.groups || []).forEach(function(g) {
           g.items.forEach(function(item) { item.value = item.value || ''; item.saved = item.value; item.busy = false; });
@@ -2103,7 +2134,7 @@ function memoryAdmin() {
     },
     async reloadAll() {
       this.savePrefs();
-      var tasks = [this.loadBoot(), this.loadCandidates(), this.loadMemories()];
+      var tasks = [this.loadBoot(), this.loadCandidates(), this.loadMemories(), this.loadSpaces()];
       if (this.page === 'review') tasks.push(this.loadJudgeDecisions());
       if (this.page === 'settings') tasks.push(this.loadRecallHistory());
       if (this.page === 'diary') tasks.push(this.loadDiary());
