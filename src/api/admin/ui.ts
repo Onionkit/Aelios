@@ -1817,8 +1817,10 @@ function memoryAdmin() {
       if (idn && this.identitySpaces().some(space => space.name === name)) return this.switchSpace(name);
       return this.selectCustomSpace(name);
     },
-    // 正在看的空间没有记忆、别的空间有，就提醒一句（多半是浏览器还记着一个旧空间名）。
+    // 自选空间时正在看的空间没有记忆、别的空间有，就提醒一句（多半是浏览器还记着一个旧空间名）。
+    // 助手自己的空间是空的不在这里提醒：设置页的 gwSpaceHint 管那种情况，这里点过去会摘掉助手。
     emptySpaceHint() {
+      if (this.currentIdentity()) return null;
       const current = this.namespace || 'default';
       if (this.gwSpaces.some(space => space.namespace === current && space.memories > 0)) return null;
       const best = this.gwSpaces.find(space => space.memories > 0);

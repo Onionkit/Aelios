@@ -84,6 +84,8 @@ test('an assistant keeps its own spaces in the picker; other spaces go through c
     ? { spaces: [{ namespace: 'default', memories: 312 }] } : base(path, options);
   await app.init();
   assert.equal(JSON.stringify(app.pickerSpaces().map((s: any) => s.name)), '["danjiu","shared"]');
+  // An assistant's own empty space is the settings page's hint to raise, not a reason to drop the assistant here.
+  assert.equal(app.emptySpaceHint(), null);
   await app.pickSpace('shared');
   assert.equal(app.selectedIdentity, 'danjiu');
   assert.equal(app.namespace, 'shared');
