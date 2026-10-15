@@ -123,6 +123,10 @@ test("remember keeps world_fact as world knowledge; other free-form types still 
   const again = (await call("remember", { content: "抹茶是用碾茶磨成的粉，产自日本。", fact_key: "world:matcha" })).structuredContent.data;
   assert.equal(again.replaced, world.id);
   assert.equal(row("memories", again.id).type, "world_fact");
+  // The old upsert rewrites in place and always carries a type (fact by default); a world fact stays one.
+  const upserted = (await call("memory_upsert", { fact_key: "world:matcha", content: "抹茶是碾茶磨成的粉。" })).structuredContent.data;
+  assert.equal(upserted.id, again.id);
+  assert.equal(row("memories", again.id).type, "world_fact");
   // A replacement that names a type of the eight takes it.
   const moved = (await call("remember", { content: "她喜欢抹茶。", replaces: again.id, type: "preference" })).structuredContent.data;
   assert.equal(row("memories", moved.id).type, "preference");

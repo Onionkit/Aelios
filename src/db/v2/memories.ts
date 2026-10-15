@@ -197,7 +197,7 @@ export async function upsertMemoryByFactKey(
   // version_status=superseded 不参与 upsert 命中（LMC-5）。
   const existing = await db
     .prepare(
-      `SELECT m.id, m.authored_by, m.response_tendency FROM memories m
+      `SELECT m.id, m.type, m.authored_by, m.response_tendency FROM memories m
        LEFT JOIN memory_lifecycle lc ON lc.memory_id = m.id
        WHERE m.namespace = ? AND m.status = 'active'
          AND (m.version_status IS NULL OR m.version_status IN ('current', 'under_review'))
@@ -206,7 +206,7 @@ export async function upsertMemoryByFactKey(
        LIMIT 1`
     )
     .bind(input.namespace, input.factKey, input.factKey)
-    .first<{ id: string; authored_by: string | null; response_tendency: string | null }>();
+    .first<{ id: string; type: string | null; authored_by: string | null; response_tendency: string | null }>();
 
   if (existing) {
     // 原地改写之前先把旧文本存一版，正文没变就不存。
@@ -231,7 +231,8 @@ export async function upsertMemoryByFactKey(
       )
       .bind(
         input.content,
-        storedMemoryType(input.type, "fact", input.allowWorldFact),
+        // 原地改写一条世界知识还是世界知识：memory_upsert、REST 总会带一个 type (默认 fact)，分不出是不是想改类型。
+        existing.type === WORLD_FACT_TYPE ? WORLD_FACT_TYPE : storedMemoryType(input.type, "fact", input.allowWorldFact),
         input.importance ?? 0.6,
         input.confidence ?? 0.8,
         JSON.stringify(input.tags ?? []),

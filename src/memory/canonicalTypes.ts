@@ -34,9 +34,10 @@ export function clampMemoryType(
 export const WORLD_FACT_TYPE = "world_fact";
 
 /**
- * 写进库的 type：照 clampMemoryType 收进 8 类；allowWorldFact 时 world_fact 原样保留。
- * 目前放行的只有 MCP remember 明写 type=world_fact、改写一条世界知识时继承它的类型、
- * 和 dream 直接更新世界知识；抽取器、候选审核、REST、导入照旧只认 8 类。
+ * 新写入的 type：照 clampMemoryType 收进 8 类；allowWorldFact 时 world_fact 原样保留。
+ * 目前放行的只有 MCP remember 明写 type=world_fact、改写一条世界知识时沿用它的类型、
+ * 和 dream 直接更新世界知识；抽取器、候选审核、REST 新建、导入照旧只认 8 类。
+ * (后台 PATCH /v1/memory/:id 改 type 本来就不过这里，原样写。)
  */
 export function storedMemoryType(
   type: string | null | undefined,
