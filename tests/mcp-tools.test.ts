@@ -116,6 +116,20 @@ test("remember saves without a fact_key and replaces with history, never in plac
   assert.equal(row("memories", keyed.id).fact_key, "user:coffee");
 });
 
+test("remember keeps world_fact as world knowledge; other free-form types still become one of the eight", async () => {
+  const world = (await call("remember", { content: "抹茶是碾茶磨成的粉。", type: "world_fact", fact_key: "world:matcha" })).structuredContent.data;
+  assert.equal(row("memories", world.id).type, "world_fact");
+  // Looked up again under the same key: the new version replaces it and is still world knowledge.
+  const again = (await call("remember", { content: "抹茶是用碾茶磨成的粉，产自日本。", fact_key: "world:matcha" })).structuredContent.data;
+  assert.equal(again.replaced, world.id);
+  assert.equal(row("memories", again.id).type, "world_fact");
+  // A replacement that names a type of the eight takes it.
+  const moved = (await call("remember", { content: "她喜欢抹茶。", replaces: again.id, type: "preference" })).structuredContent.data;
+  assert.equal(row("memories", moved.id).type, "preference");
+  const free = (await call("remember", { content: "一个项目。", type: "project" })).structuredContent.data;
+  assert.equal(row("memories", free.id).type, "fact");
+});
+
 test("forget archives by default and erases only when asked", async () => {
   memory("m-a", "一条要收起来的。");
   memory("m-b", "一条要删掉的。");

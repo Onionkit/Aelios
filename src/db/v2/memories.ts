@@ -1,6 +1,6 @@
 import { upsertMemoryEmbedding } from "../../memory/embedding";
 import { deleteFtsRow, upsertMemoryFts } from "../../memory/fts";
-import { clampMemoryType } from "../../memory/canonicalTypes";
+import { storedMemoryType, WORLD_FACT_TYPE } from "../../memory/canonicalTypes";
 import type {
   Env,
   MemoryLifecycleRow,
@@ -184,6 +184,8 @@ export async function upsertMemoryByFactKey(
     // 只在新建时用：导入的条目带着原来的日期和置顶。改写已有条目时不动这两样。
     createdAt?: string | null;
     pinned?: boolean;
+    /** type=world_fact 时存成世界知识，不收进 8 类 (storedMemoryType)。 */
+    allowWorldFact?: boolean;
   }
 ): Promise<{ id: string; created: boolean }> {
   const db = env.DB;
@@ -229,7 +231,7 @@ export async function upsertMemoryByFactKey(
       )
       .bind(
         input.content,
-        clampMemoryType(input.type, "fact"),
+        storedMemoryType(input.type, "fact", input.allowWorldFact),
         input.importance ?? 0.6,
         input.confidence ?? 0.8,
         JSON.stringify(input.tags ?? []),
@@ -274,7 +276,7 @@ export async function upsertMemoryByFactKey(
     .bind(
       id,
       input.namespace,
-      clampMemoryType(input.type, "fact"),
+      storedMemoryType(input.type, "fact", input.allowWorldFact),
       input.content,
       input.importance ?? 0.6,
       input.confidence ?? 0.8,
@@ -419,6 +421,8 @@ export async function supersedeMemory(
     responseTendency?: string | null;
     /** 新条的 created_at；不给就是现在 (导入的候选批准时给原来那天)。 */
     createdAt?: string | null;
+    /** newType=world_fact 时存成世界知识，不收进 8 类 (storedMemoryType)。 */
+    allowWorldFact?: boolean;
   }
 ): Promise<{ oldStatus: string; newId: string }> {
   const db = env.DB;
@@ -476,7 +480,7 @@ export async function supersedeMemory(
       .bind(
         nextId,
         input.namespace,
-        clampMemoryType(input.newType, "fact"),
+        storedMemoryType(input.newType, "fact", input.allowWorldFact),
         input.newContent,
         input.importance ?? 0.6,
         input.confidence ?? 0.8,
@@ -543,7 +547,8 @@ export async function supersedeMemory(
     .bind(
       nextId,
       input.namespace,
-      clampMemoryType(input.newType ?? old.type, "fact"),
+      // 没给新类型时继承旧条的：改写一条世界知识，新版本还是世界知识。
+      storedMemoryType(input.newType ?? old.type, "fact", input.allowWorldFact || (input.newType == null && old.type === WORLD_FACT_TYPE)),
       input.newContent,
       input.importance ?? 0.6,
       input.confidence ?? 0.8,
