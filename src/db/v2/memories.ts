@@ -1,6 +1,6 @@
 import { upsertMemoryEmbedding } from "../../memory/embedding";
 import { deleteFtsRow, upsertMemoryFts } from "../../memory/fts";
-import { clampMemoryType } from "../../memory/canonicalTypes";
+import { storedMemoryType, WORLD_FACT_TYPE } from "../../memory/canonicalTypes";
 import type {
   Env,
   MemoryLifecycleRow,
@@ -184,6 +184,8 @@ export async function upsertMemoryByFactKey(
     // 只在新建时用：导入的条目带着原来的日期和置顶。改写已有条目时不动这两样。
     createdAt?: string | null;
     pinned?: boolean;
+    /** type=world_fact 时存成世界知识，不收进 8 类 (storedMemoryType)。 */
+    allowWorldFact?: boolean;
   }
 ): Promise<{ id: string; created: boolean }> {
   const db = env.DB;
@@ -195,7 +197,7 @@ export async function upsertMemoryByFactKey(
   // version_status=superseded 不参与 upsert 命中（LMC-5）。
   const existing = await db
     .prepare(
-      `SELECT m.id, m.authored_by, m.response_tendency FROM memories m
+      `SELECT m.id, m.type, m.authored_by, m.response_tendency FROM memories m
        LEFT JOIN memory_lifecycle lc ON lc.memory_id = m.id
        WHERE m.namespace = ? AND m.status = 'active'
          AND (m.version_status IS NULL OR m.version_status IN ('current', 'under_review'))
@@ -204,7 +206,7 @@ export async function upsertMemoryByFactKey(
        LIMIT 1`
     )
     .bind(input.namespace, input.factKey, input.factKey)
-    .first<{ id: string; authored_by: string | null; response_tendency: string | null }>();
+    .first<{ id: string; type: string | null; authored_by: string | null; response_tendency: string | null }>();
 
   if (existing) {
     // 原地改写之前先把旧文本存一版，正文没变就不存。
@@ -229,7 +231,8 @@ export async function upsertMemoryByFactKey(
       )
       .bind(
         input.content,
-        clampMemoryType(input.type, "fact"),
+        // 原地改写一条世界知识还是世界知识：memory_upsert、REST 总会带一个 type (默认 fact)，分不出是不是想改类型。
+        existing.type === WORLD_FACT_TYPE ? WORLD_FACT_TYPE : storedMemoryType(input.type, "fact", input.allowWorldFact),
         input.importance ?? 0.6,
         input.confidence ?? 0.8,
         JSON.stringify(input.tags ?? []),
@@ -274,7 +277,7 @@ export async function upsertMemoryByFactKey(
     .bind(
       id,
       input.namespace,
-      clampMemoryType(input.type, "fact"),
+      storedMemoryType(input.type, "fact", input.allowWorldFact),
       input.content,
       input.importance ?? 0.6,
       input.confidence ?? 0.8,
@@ -419,6 +422,8 @@ export async function supersedeMemory(
     responseTendency?: string | null;
     /** 新条的 created_at；不给就是现在 (导入的候选批准时给原来那天)。 */
     createdAt?: string | null;
+    /** newType=world_fact 时存成世界知识，不收进 8 类 (storedMemoryType)。 */
+    allowWorldFact?: boolean;
   }
 ): Promise<{ oldStatus: string; newId: string }> {
   const db = env.DB;
@@ -476,7 +481,7 @@ export async function supersedeMemory(
       .bind(
         nextId,
         input.namespace,
-        clampMemoryType(input.newType, "fact"),
+        storedMemoryType(input.newType, "fact", input.allowWorldFact),
         input.newContent,
         input.importance ?? 0.6,
         input.confidence ?? 0.8,
@@ -543,7 +548,8 @@ export async function supersedeMemory(
     .bind(
       nextId,
       input.namespace,
-      clampMemoryType(input.newType ?? old.type, "fact"),
+      // 没给新类型时继承旧条的：改写一条世界知识，新版本还是世界知识。
+      storedMemoryType(input.newType ?? old.type, "fact", input.allowWorldFact || (input.newType == null && old.type === WORLD_FACT_TYPE)),
       input.newContent,
       input.importance ?? 0.6,
       input.confidence ?? 0.8,

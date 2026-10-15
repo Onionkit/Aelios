@@ -250,7 +250,8 @@ function getTools(options: ToolListOptions): Array<Record<string, unknown>> {
           reason: { type: "string", description: "With replaces: a short note on what changed." },
           type: {
             type: "string",
-            description: `One of ${MEMORY_TYPES_TEXT}. Defaults to fact, or to the replaced memory's type.`
+            description:
+              `One of ${MEMORY_TYPES_TEXT}, or world_fact for general knowledge about the world rather than about anyone. Defaults to fact, or to the replaced memory's type.`
           },
           valid_as_of: {
             type: "string",
@@ -589,6 +590,7 @@ async function callTool(
           newContent: content,
           newType: readString(args.type),
           newFactKey: factKey,
+          allowWorldFact: true,
           validAsOf: readString(args.valid_as_of),
           reason: readString(args.reason),
           importance: readNumber(args.importance, 0.6),
@@ -608,6 +610,7 @@ async function callTool(
         factKey: factKey ?? `remember:${newId("k").slice(2)}`,
         content,
         type: readString(args.type) || "fact",
+        allowWorldFact: true,
         importance: readNumber(args.importance, 0.6),
         confidence: readNumber(args.confidence, 0.8),
         tags: readStringArray(args.tags),
