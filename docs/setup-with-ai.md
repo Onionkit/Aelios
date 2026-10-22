@@ -130,17 +130,17 @@ cf ai-gateway gateways providers list --gateway-id default
 
 AI Gateway 可以自定义 provider，中转站和没内置的厂商都这样接，照样存 key、照样有日志。
 
-1. **建自定义 provider**（这一步没有秘密，你来做）。先问用户中转站的地址，`base_url` 填到 `/v1` 为止；`slug` 用小写英文和连字符，比如 `navy`：
+1. **建自定义 provider**（这一步没有秘密，你来做）。先问用户那家的 OpenAI 兼容地址。`base_url` 填 `/v1` 前面那一段，末尾的斜杠留着：比如 Kimi Coding 的接口是 `https://api.kimi.ai/coding/v1/chat/completions`，`base_url` 就填 `https://api.kimi.ai/coding/`。AI Gateway 会自己在后面接 `v1/chat/completions`。`slug` 用小写英文和连字符，比如 `kimi`：
 
    ```bash
-   cf ai-gateway custom-providers create --name <显示名> --slug <slug> --base-url https://example.com/v1 --enable true
+   cf ai-gateway custom-providers create --name <显示名> --slug <slug> --base-url https://api.kimi.ai/coding/ --enable true
    ```
 
-   `--enable true` 一定要带，不带建出来是停用的。Aelios 会在 `base_url` 后面接 `/chat/completions`、`/messages` 或 `/responses`。
+   `--enable true` 一定要带，不带建出来是停用的。
 
 2. **用户存 key**：后台 `default` → **Provider Keys** → **Add API Key**，下拉里选刚建的这个 provider，别名填 `default`。在终端里存的话，`--provider-slug` 写 `custom-<slug>`；报错就改回后台存。
 
-3. 模型名一律写成 `custom-<slug>/<中转站给的模型名>`，比如 `custom-navy/gpt-5.1`。
+3. 模型名一律写成 `custom-<slug>/<那家的模型名>`，比如 `custom-kimi/kimi-for-coding`。
 
 然后照常做第 4 步。
 
@@ -232,10 +232,10 @@ curl -sS <Worker 地址>/daily/v1/chat/completions \
 - 提到 **Unified billing**：Cloudflare 没找到用户存的 key，在用它自己的计费。多半是 key 存错了厂商、别名不是 `default`，或者模型名前缀和厂商对不上。
 - **401、403**：令牌权限不够，或者网关认证没开。回第 3、4 步看。
 - **Unknown gateway provider**：前缀写错了。自定义 provider 要写 `custom-<slug>/`，并且建的时候带了 `--enable true`。
-- **404**：多半是自定义 provider 的 `base_url` 多了或少了 `/v1`。
+- **404**：多半是自定义 provider 的 `base_url` 多写了 `/v1`（AI Gateway 会自己接），或者少了那家地址里的一段路径。
 - **Upstream not configured**：第 5 步的 `upstream` 没填上。
 
-Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。中转站要看它支不支持 Anthropic 格式（`/v1/messages`）或 Responses 格式。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
+Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。自定义 provider 走这两条时，Aelios 直接在 `base_url` 后面接 `messages`、`responses`，不带 `v1`，跟那家的路径可能对不上。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
 
 ## 7. 交给用户
 
