@@ -173,6 +173,8 @@ If you only have a Claude subscription and cannot use API mode, get automatic pe
 
 **Seeing images (guide-dog)**: add the `GUIDE_DOG_API_KEY` secret, then point your client at `https://<Worker address>/v1/guide-dog` with model `companion`. The guide-dog only describes images — it writes no memory.
 
+**A companion that lives on Cloudflare: [Aelios-resident](https://github.com/wusaki0723/Aelios-resident)** — a separate Worker (one Durable Object, built on Cloudflare's Think) that you talk to on Telegram and on its own web page, both one conversation. With Aelios connected, its chat goes through your assistant's `/v1` endpoint like any other client, so Aelios does the recalling and the remembering; it also uses the memory tools, and what lasts from its web searches is saved as world knowledge. On top of that it writes itself a handoff letter when you go quiet, checks in on a schedule, searches and reads the web, connects other MCP servers, and lets you change the model, persona and settings on its web page. It runs on the Workers Free plan. To connect it, fill in this Aelios's address, a key and the assistant to chat as on its settings page (the model you pick has to be one of that assistant's primary models); deployment is in its README.
+
 ## Common pitfalls
 
 - Deploy with `npm run deploy`, never a bare `wrangler deploy`.
@@ -264,7 +266,7 @@ AGPL-3.0
 
 Free to use and modify; if you run a modified version as a network service, you must open-source your modifications under the same license.
 
-The final v1 point is tag `v1-final` (MIT at the time). `tg-bot` is the Telegram integration branch, stuck at 2026-07-16 as of 2026-09-11 with main 154 commits ahead (135 files, ~18k lines changed) while the branch itself only added 17 files — it can't be merged back as-is. Kept as history; resurrect it by rebasing onto main, never by direct merge.
+The final v1 point is tag `v1-final` (MIT at the time).
 
 ## Community
 
