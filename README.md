@@ -266,7 +266,7 @@ AGPL-3.0
 
 Free to use and modify; if you run a modified version as a network service, you must open-source your modifications under the same license.
 
-The final v1 point is tag `v1-final` (MIT at the time). `tg-bot` is the Telegram integration branch, stuck at 2026-07-16 as of 2026-09-11 with main 154 commits ahead (135 files, ~18k lines changed) while the branch itself only added 17 files — it can't be merged back as-is. Kept as history; resurrect it by rebasing onto main, never by direct merge. For a Telegram companion today, use [Aelios-resident](https://github.com/wusaki0723/Aelios-resident).
+The final v1 point is tag `v1-final` (MIT at the time).
 
 ## Community
 
