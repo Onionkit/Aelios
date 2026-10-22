@@ -235,7 +235,7 @@ curl -sS <Worker 地址>/daily/v1/chat/completions \
 - **404**：多半是自定义 provider 的 `base_url` 多写了 `/v1`（AI Gateway 会自己接），或者少了那家地址里的一段路径。
 - **Upstream not configured**：第 5 步的 `upstream` 没填上。
 
-Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。自定义 provider 走这两条时，Aelios 直接在 `base_url` 后面接 `messages`、`responses`，不带 `v1`，跟那家的路径可能对不上。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
+Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
 
 ## 7. 交给用户
 
