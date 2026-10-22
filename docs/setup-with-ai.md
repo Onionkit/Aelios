@@ -270,7 +270,7 @@ API Key：<钥匙>
 
 ## 导入以前的记忆和聊天记录
 
-两样都只进审核页「导入的」那一栏，用户在 `<Worker 地址>/admin` 里点了才算数。先看导入设置，里面有限额、抽取模型和给旧 AI 的提示词：
+整理好的条目直接写进库；聊天记录要先让模型从原话里抽候选，抽出来的进审核页「导入的」那一栏，用户在 `<Worker 地址>/admin` 里点了才算数。先看导入设置，里面有限额、抽取模型和给旧 AI 的提示词：
 
 ```bash
 curl -s "<Worker 地址>/v1/import/info?namespace=default" -H "Authorization: Bearer <钥匙>"
@@ -303,14 +303,15 @@ curl -s "<Worker 地址>/v1/import/info?namespace=default" -H "Authorization: Be
      "namespace": "default",
      "fingerprint": "<整个文件的 sha256>",
      "name": "<文件名>",
-     "mode": "review",
+     "mode": "direct",
      "start_index": 0,
      "total": 120,
      "entries": [ "...这一批的 25 条，原样用预览返回的对象..." ]
    }
    ```
 
-   - **`mode` 一定要写 `"review"`**，不写就是直接进库。用户明确说「直接写」才用 `"direct"`。
+   - `"direct"` 直接写进库：跟库里一字不差的跳过，跟库里某条很像的不硬写、转去审核页「导入的」等用户定，其余新建；带 `factKey` 的按 key 改写，旧版留着。用户说想一条条过目，才改成 `"review"`，全部先进审核。
+   - 写完把返回的 `counts` 告诉用户：新建 `created`、改写 `updated`、跳过 `unchanged` 和 `duplicate`、转审核 `queued`、失败 `failed`。有 `queued` 的，请用户去 `/admin` → **审核队列** → **导入的** 看一眼。
    - 每批 `start_index` 加 25，`fingerprint`、`total` 不变。中途断了，用同一个 `fingerprint` 从断的地方接着发。
 
 ### 聊天记录
