@@ -36,7 +36,7 @@
    | 用户有什么 | 走哪条 |
    |---|---|
    | 某家的 API key：DeepSeek、OpenAI、Gemini、OpenRouter、Anthropic 等，包括在网站上用账号登录（OAuth）换来的 key | **API 模式**，key 存在 Cloudflare AI Gateway 里（BYOK）。第 1 步到第 7 步全做 |
-   | 一个中转站给的地址和 key，或者某家只给 OpenAI 兼容地址、AI Gateway 里没有这家 | **API 模式**，上游直接填那个地址。第 3 步走「中转站」那段，跳过第 4 步 |
+   | 一个中转站给的地址和 key，或者 AI Gateway 的下拉列表里没有的厂商 | **API 模式**，同样走 AI Gateway：先建一个自定义 provider，key 照样存在它下面。第 3 步多做「自定义 provider」那段 |
    | 只有 Claude 订阅（Pro、Max），没有 API | 订阅变不成 API。只能走 **MCP 连接器**，用 Claude Code 的话再加仓库里的 Hook（`integrations/claude-code/`）。直接跳到第 7 步的 MCP 部分 |
 
    告诉用户：**API 模式加 MCP 连接器是满血用法**。API 模式每句话自动记、自动召回；MCP 让助手能主动查、主动记、自己审记忆。只用 MCP 加 Hook 是权宜之计。
@@ -104,6 +104,8 @@ cf ai-gateway gateways create --id default --authentication true \
 
 ### 让用户存 key
 
+中转站、下拉列表里没有的厂商，先跳到下面「自定义 provider」那段。
+
 两种办法，让用户挑。这一步你别碰 key。
 
 **A. 在 Cloudflare 后台点。** 把这个链接给用户：<https://dash.cloudflare.com/?to=/:account/ai/ai-gateway>。进 `default` → **Provider Keys** → **Add API Key**，选厂商、粘贴 key，别名填 `default`，保存。
@@ -124,24 +126,25 @@ read -rs -p "粘贴 key 后回车：" K && echo \
 cf ai-gateway gateways providers list --gateway-id default
 ```
 
-### 中转站，或者 AI Gateway 里没有的厂商
+### 中转站，或者下拉列表里没有的厂商：自定义 provider
 
-不用 AI Gateway。上游直接填中转站的地址，一般以 `/v1` 结尾，比如 `https://example.com/v1`。Aelios 会在后面接 `/chat/completions`。
+AI Gateway 可以自定义 provider，中转站和没内置的厂商都这样接，照样存 key、照样有日志。
 
-中转站的 key 存在 Worker 的 Secret `CLOUDFLARE_API_TOKEN` 里（名字是历史原因，Aelios 用它向上游认证）。同样让用户自己存：
+1. **建自定义 provider**（这一步没有秘密，你来做）。先问用户中转站的地址，`base_url` 填到 `/v1` 为止；`slug` 用小写英文和连字符，比如 `navy`：
 
-- 后台：**Workers & Pages** → `companion-memory-proxy` → **Settings → Variables and Secrets** → **Add**，类型选 **Secret**，名字 `CLOUDFLARE_API_TOKEN`，值是中转站的 key。
-- 或者用户自己的终端：
+   ```bash
+   cf ai-gateway custom-providers create --name <显示名> --slug <slug> --base-url https://example.com/v1 --enable true
+   ```
 
-  ```bash
-  read -rs -p "粘贴 key 后回车：" K && echo \
-    && cf workers secrets update CLOUDFLARE_API_TOKEN --worker companion-memory-proxy --type secret_text --text "$K" >/dev/null \
-    && echo 已存; unset K
-  ```
+   `--enable true` 一定要带，不带建出来是停用的。Aelios 会在 `base_url` 后面接 `/chat/completions`、`/messages` 或 `/responses`。
 
-存之前先 `cf workers secrets list --worker companion-memory-proxy` 看看，已经有 `CLOUDFLARE_API_TOKEN` 的要先问用户能不能换。
+2. **用户存 key**：后台 `default` → **Provider Keys** → **Add API Key**，下拉里选刚建的这个 provider，别名填 `default`。在终端里存的话，`--provider-slug` 写 `custom-<slug>`；报错就改回后台存。
 
-整个网关只有一个上游。走中转站就不能同时走 BYOK，告诉用户。走这条的跳过第 4 步。
+3. 模型名一律写成 `custom-<slug>/<中转站给的模型名>`，比如 `custom-navy/gpt-5.1`。
+
+然后照常做第 4 步。
+
+整个网关只有一个上游（第 5 步的 `upstream`），内置厂商和自定义 provider 都挂在同一个 AI Gateway 下面，可以混着用。
 
 ## 4. 生成 Cloudflare 令牌，存进 Worker
 
@@ -183,7 +186,7 @@ V=$(cf accounts tokens create --name aelios-gateway --policies @/tmp/aelios-poli
   && echo 已存; unset V; rm -f /tmp/aelios-policy.json
 ```
 
-建令牌被拒（比如登录的账号没有建令牌的权限）：别反复试。让用户在后台建一把，再自己填进 Worker：AI Gateway → `default` → **Settings** → **Authenticated Gateway** 那里建令牌，然后照第 3 步「中转站」那段的后台办法，把它存成 `CLOUDFLARE_API_TOKEN`。
+建令牌被拒（比如登录的账号没有建令牌的权限）：别反复试。让用户在后台建一把，再自己填进 Worker：AI Gateway → `default` → **Settings** → **Authenticated Gateway** 那里建令牌；然后 **Workers & Pages** → `companion-memory-proxy` → **Settings → Variables and Secrets** → **Add**，类型选 **Secret**，名字 `CLOUDFLARE_API_TOKEN`，值是那把令牌。
 
 ## 5. 配助手
 
@@ -195,7 +198,7 @@ curl -s <Worker 地址>/api/gateway/spaces -H "Authorization: Bearer <钥匙>"
 
 新助手的 `namespace` 填记忆最多的那个，一般是 `default`。MCP 连接器写的也是 `default`，这样 API 和 MCP 用的是同一份记忆。
 
-模型名：BYOK 一律写成 `厂商/模型`，比如 `deepseek/deepseek-chat`、`openai/gpt-5`、`google-ai-studio/gemini-2.5-pro`。拿不准就让用户在厂商文档里确认模型名，前面加上第 3 步的厂商写法。走中转站的照中转站给的名字写，不加前缀。
+模型名：BYOK 一律写成 `厂商/模型`，比如 `deepseek/deepseek-chat`、`openai/gpt-5`、`google-ai-studio/gemini-2.5-pro`。拿不准就让用户在厂商文档里确认模型名，前面加上第 3 步的厂商写法。自定义 provider 写成 `custom-<slug>/<模型名>`。
 
 然后 PATCH。**`identities` 是整份替换的**：第 2 步拿到的配置里已经有助手的，把它们原样放进列表，再加新的这个。
 
@@ -203,7 +206,7 @@ curl -s <Worker 地址>/api/gateway/spaces -H "Authorization: Bearer <钥匙>"
 curl -sS -X PATCH <Worker 地址>/api/gateway/config \
   -H "Authorization: Bearer <钥匙>" -H "Content-Type: application/json" \
   -d '{
-    "upstream": { "address": "<账号 ID，走中转站就填中转站地址>" },
+    "upstream": { "address": "<账号 ID>" },
     "identities": [
       { "slug": "daily", "namespace": "default", "keys": ["CHATBOX_API_KEY"],
         "models": ["deepseek/deepseek-chat"],
@@ -228,9 +231,11 @@ curl -sS <Worker 地址>/daily/v1/chat/completions \
 
 - 提到 **Unified billing**：Cloudflare 没找到用户存的 key，在用它自己的计费。多半是 key 存错了厂商、别名不是 `default`，或者模型名前缀和厂商对不上。
 - **401、403**：令牌权限不够，或者网关认证没开。回第 3、4 步看。
+- **Unknown gateway provider**：前缀写错了。自定义 provider 要写 `custom-<slug>/`，并且建的时候带了 `--enable true`。
+- **404**：多半是自定义 provider 的 `base_url` 多了或少了 `/v1`。
 - **Upstream not configured**：第 5 步的 `upstream` 没填上。
 
-Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
+Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。中转站要看它支不支持 Anthropic 格式（`/v1/messages`）或 Responses 格式。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
 
 ## 7. 交给用户
 
