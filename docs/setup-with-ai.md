@@ -42,7 +42,7 @@
    告诉用户：**API 模式加 MCP 连接器是满血用法**。API 模式每句话自动记、自动召回；MCP 让助手能主动查、主动记、自己审记忆。只用 MCP 加 Hook 是权宜之计。
 
 4. **在哪个软件里聊？** Chatbox、Cherry Studio、自己的 agent、Claude Code、Codex……决定第 6、7 步怎么填。
-5. **助手叫什么？** 一个小写英文名，会出现在地址里，比如 `daily`。再问日记里怎么称呼用户和助手，可以不填。
+5. **你的 AI 叫什么名字？用户希望被怎么称呼？** 地址里那一段就用 AI 的名字，转成小写拼音或英文（比如叫阿遥就写 `ayao`），下面的命令里写作 `<名字>`。原名填 `assistantName`、用户的称呼填 `userName`，夜里写日记就这么叫他们。
 6. **有没有以前的记忆、聊天记录要搬过来？** 有的话配完做「导入以前的记忆和聊天记录」。
 
 ## 1. 装 Cloudflare 命令行，登录
@@ -198,9 +198,9 @@ curl -sS -X PATCH <Worker 地址>/api/gateway/config \
   -d '{
     "upstream": { "address": "<账号 ID>" },
     "identities": [
-      { "slug": "daily", "namespace": "default", "keys": ["CHATBOX_API_KEY"],
+      { "slug": "ayao", "namespace": "default", "keys": ["CHATBOX_API_KEY"],
         "models": ["*deepseek*"],
-        "userName": "<用户的称呼>", "assistantName": "<助手的名字>" }
+        "userName": "<用户的称呼>", "assistantName": "阿遥" }
     ]
   }'
 ```
@@ -211,7 +211,7 @@ curl -sS -X PATCH <Worker 地址>/api/gateway/config \
 ## 6. 试一句
 
 ```bash
-curl -sS <Worker 地址>/daily/v1/chat/completions \
+curl -sS <Worker 地址>/<名字>/v1/chat/completions \
   -H "Authorization: Bearer <钥匙>" -H "Content-Type: application/json" \
   -d '{"model":"deepseek/deepseek-chat","messages":[{"role":"user","content":"你好，回我一个字就行"}]}'
 ```
@@ -224,14 +224,14 @@ curl -sS <Worker 地址>/daily/v1/chat/completions \
 - **404**：多半是自定义 provider 的 `base_url` 多写了 `/v1`（AI Gateway 会自己接），或者少了那家地址里的一段路径。
 - **Upstream not configured**：第 5 步的 `upstream` 没填上。
 
-Claude Code 走 `/daily/v1/messages`，Codex 走 `/daily/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
+Claude Code 走 `/<名字>/v1/messages`，Codex 走 `/<名字>/v1/responses`。这两条是转到厂商的原生接口，不是每家都有：`anthropic/` 的模型能走 messages，`openai/` 的能走 responses，别家多半只有上面那条 chat。用户要在这两个软件里用，先用 curl 试对应的路径，通了再改配置。
 
 ## 7. 交给用户
 
 最后用一小块话交给用户，照这个样子：
 
 ```text
-地址（Base URL）：<Worker 地址>/daily/v1
+地址（Base URL）：<Worker 地址>/<名字>/v1
 API Key：<钥匙>
 模型：deepseek/deepseek-chat
 ```
@@ -239,9 +239,9 @@ API Key：<钥匙>
 再补几句：
 
 - 模型名要一字不差，前缀也要。软件里拉模型列表的话，挑这个名字。
-- 有的软件会自己在地址后面补 `/v1`，那就只填到 `/daily`。
-- Claude Code：`ANTHROPIC_BASE_URL=<Worker 地址>/daily`，`ANTHROPIC_AUTH_TOKEN=<钥匙>`。
-- Codex：`base_url = "<Worker 地址>/daily/v1"`，并设 `wire_api = "responses"`。
+- 有的软件会自己在地址后面补 `/v1`，那就只填到 `/<名字>`。
+- Claude Code：`ANTHROPIC_BASE_URL=<Worker 地址>/<名字>`，`ANTHROPIC_AUTH_TOKEN=<钥匙>`。
+- Codex：`base_url = "<Worker 地址>/<名字>/v1"`，并设 `wire_api = "responses"`。
 - 改用户的客户端配置文件前先问。别改你自己正在用的那份，改了你会断线。
 
 **再接上 MCP 连接器，就是满血。** 连接器地址：
@@ -333,7 +333,7 @@ curl -s "<Worker 地址>/v1/import/info?namespace=default" -H "Authorization: Be
    POST /v1/import/chat/chunk
    { "namespace": "default", "import_id": "<批 ID>",
      "chunk": { "key": "2025-12-15#0", "day": "2025-12-15",
-       "messages": [ { "seq": 0, "role": "user", "content": "……", "time": "2025-12-15T23:01:00+08:00", "speaker": "<名字>" } ] } }
+       "messages": [ { "seq": 0, "role": "user", "content": "……", "time": "2025-12-15T23:01:00+08:00", "speaker": "<说话人>" } ] } }
    ```
 
    `key` 每段不同、不超过 64 个字符；`seq` 在一段里不重复。一段一段串着发，别并发。
