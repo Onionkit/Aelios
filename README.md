@@ -12,6 +12,20 @@ Aelios is a memory gateway that runs on Cloudflare. Your Chatbox / Claude Code /
 your client  →  Aelios (identify, remember, recall)  →  the model
 ```
 
+## Let an AI set it up
+
+With an AI that can run commands (Claude Code, Codex and the like), send it this:
+
+```text
+Set up Aelios (my AI memory gateway) for me. Read https://raw.githubusercontent.com/wusaki0723/Aelios/main/docs/setup-with-ai.md first and follow it. When I need to click something in the browser or enter a key myself, stop and tell me where.
+```
+
+It creates the Cloudflare token, configures the assistant and imports your old memories (and deploys Aelios first if you haven't). At the end it hands you a base URL, an API key and the model name to pick, ready for your chat app. You do two things yourself: click "Allow" once in the browser, and store your model provider's key in Cloudflare (it tells you where). The guide is written in Chinese; the AI will talk to you in your language.
+
+The recommended setup is **API mode plus the MCP connector**: chats go through Aelios, so every turn is remembered and recalled automatically, and with MCP the assistant can also look things up and save them on its own. Only if you have a Claude subscription and no API access, use MCP alone.
+
+To do it by hand, follow the three steps below.
+
 ## Quick start — three steps
 
 ### 1. Deploy
@@ -137,7 +151,7 @@ One assistant can write to one space and read from several. A fresh conversation
 2. Add the `CLOUDFLARE_API_TOKEN` Worker secret.
 3. In `/admin` Settings, put your 32-character account ID as the upstream and add assistants.
 
-Skip all of that and memory recall + the overnight Dream still work (via Workers AI).
+Skip all of that and memory recall + the overnight Dream still work (via Workers AI). An AI can do these three steps for you: see [Let an AI set it up](#let-an-ai-set-it-up).
 
 **MCP memory for the Claude app (web and mobile), Claude Code and Codex**:
 
@@ -155,7 +169,7 @@ You have the Aelios memory connector: it is your long-term memory of me. In ever
 - Conversations in the Claude app do not pass through Aelios, so the nightly diary and candidates only see what the assistant hands over with `log_conversation`. Clients that go through the gateway don't need it.
 - Only the nine everyday tools are listed by default. For maintenance tools such as `memory_get` and `memory_export`, add `&tools=all` to the address.
 
-For automatic per-message recall and batch write-back in Claude Code, use the Hook in this repo: [`integrations/claude-code/`](integrations/claude-code/README.md).
+If you only have a Claude subscription and cannot use API mode, get automatic per-message recall and batch write-back in Claude Code with the Hook in this repo: [`integrations/claude-code/`](integrations/claude-code/README.md).
 
 **Seeing images (guide-dog)**: add the `GUIDE_DOG_API_KEY` secret, then point your client at `https://<Worker address>/v1/guide-dog` with model `companion`. The guide-dog only describes images — it writes no memory.
 

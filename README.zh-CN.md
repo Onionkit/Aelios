@@ -6,6 +6,20 @@
 
 它是一个跑在 Cloudflare 上的记忆网关：你的 Chatbox / Claude Code / Codex 先连它，它再把请求转给模型。对话会被记下来，下次自动想起来。
 
+## 让 AI 帮你配
+
+用 Claude Code、Codex 这类能跑命令的 AI，把这段话发给它：
+
+```text
+帮我配好 Aelios（我的 AI 记忆网关）。先读 https://raw.githubusercontent.com/wusaki0723/Aelios/main/docs/setup-with-ai.md ，照着做。需要我在浏览器里点、或者需要我自己填 key 的时候，停下来告诉我去哪儿填。
+```
+
+它会生成 Cloudflare 令牌、配好助手、导入以前的记忆（还没部署的话先帮你部署），最后交给你一个地址、一把 API Key 和要选的模型名，填进聊天软件就能用。你自己只做两件事：在浏览器里点一次「允许」，把模型厂商的 key 存进 Cloudflare（它会告诉你去哪儿填）。
+
+推荐 **API 模式加 MCP 连接器**：聊天经过 Aelios，每句话自动记、自动想起来；再接上 MCP，助手还能主动查、主动记。只有 Claude 订阅、没有 API 的，才只用 MCP。
+
+想自己动手，看下面的三步。
+
 ## 怎么用
 
 就三步。
@@ -137,7 +151,7 @@ GitHub 不会自己更新 Fork。有新版本时：
 2. Worker Secrets 加 `CLOUDFLARE_API_TOKEN`。
 3. `/admin` 设置里，上游填 32 位账号 ID，再加助手。
 
-不配这些，记忆召回和夜间整理也能跑（走 Workers AI）。
+不配这些，记忆召回和夜间整理也能跑（走 Workers AI）。这三步可以交给 AI 做，见[让 AI 帮你配](#让-ai-帮你配)。
 
 **在 Claude 官方 App（网页、手机）、Claude Code、Codex 里用 MCP 记忆**
 
@@ -155,7 +169,7 @@ https://<Worker 地址>/mcp?token=<CHATBOX_API_KEY>
 - 官方 App 的对话不经过 Aelios，夜里的日记和候选靠助手调 `log_conversation` 交过来；走网关的客户端不用调。
 - 默认只列 9 个常用工具；要 `memory_get`、`memory_export` 这类维护工具，地址后面加 `&tools=all`。
 
-想让 Claude Code 每条消息自动召回、批量写回，用仓库里的 Hook：[`integrations/claude-code/`](./integrations/claude-code/README.md)。
+只有 Claude 订阅、走不了 API 时，想让 Claude Code 每条消息自动召回、批量写回，用仓库里的 Hook：[`integrations/claude-code/`](./integrations/claude-code/README.md)。
 
 **看图**
 
