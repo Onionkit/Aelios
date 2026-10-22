@@ -17,10 +17,10 @@ your client  →  Aelios (identify, remember, recall)  →  the model
 With an AI that can run commands (Claude Code, Codex and the like), send it this:
 
 ```text
-Set up Aelios (my AI memory gateway) for me. Read https://raw.githubusercontent.com/wusaki0723/Aelios/main/docs/setup-with-ai.md first and follow it. When I need to click something in the browser or enter a key myself, stop and tell me where.
+Install and set up Aelios (my AI memory gateway) for me. Read https://raw.githubusercontent.com/wusaki0723/Aelios/main/docs/setup-with-ai.md first and follow it. When I need to click something in the browser or enter a key myself, stop and tell me where.
 ```
 
-It creates the Cloudflare token, configures the assistant and imports your old memories (and deploys Aelios first if you haven't). At the end it hands you a base URL, an API key and the model name to pick, ready for your chat app. You do two things yourself: click "Allow" once in the browser, and store your model provider's key in Cloudflare (it tells you where). The guide is written in Chinese; the AI will talk to you in your language.
+It works from scratch: it forks and deploys Aelios, creates the Cloudflare token, configures the assistant and imports your old memories. At the end it hands you a base URL, an API key and the model name to pick, ready for your chat app. You need a Cloudflare account (the free plan is enough) and a key for your model. All you do yourself is click "Allow" in the browser (twice for a new install) and store the model key in the Cloudflare dashboard (it tells you where). The guide is written in Chinese; the AI will talk to you in your language.
 
 The recommended setup is **API mode plus the MCP connector**: chats go through Aelios, so every turn is remembered and recalled automatically, and with MCP the assistant can also look things up and save them on its own. Only if you have a Claude subscription and no API access, use MCP alone.
 

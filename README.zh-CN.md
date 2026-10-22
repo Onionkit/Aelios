@@ -11,10 +11,10 @@
 用 Claude Code、Codex 这类能跑命令的 AI，把这段话发给它：
 
 ```text
-帮我配好 Aelios（我的 AI 记忆网关）。先读 https://raw.githubusercontent.com/wusaki0723/Aelios/main/docs/setup-with-ai.md ，照着做。需要我在浏览器里点、或者需要我自己填 key 的时候，停下来告诉我去哪儿填。
+帮我装好、配好 Aelios（我的 AI 记忆网关）。先读 https://raw.githubusercontent.com/wusaki0723/Aelios/main/docs/setup-with-ai.md ，照着做。需要我在浏览器里点、或者需要我自己填 key 的时候，停下来告诉我去哪儿填。
 ```
 
-它会生成 Cloudflare 令牌、配好助手、导入以前的记忆（还没部署的话先帮你部署），最后交给你一个地址、一把 API Key 和要选的模型名，填进聊天软件就能用。你自己只做两件事：在浏览器里点一次「允许」，把模型厂商的 key 存进 Cloudflare（它会告诉你去哪儿填）。
+从零开始也行：它会帮你 fork、部署、生成 Cloudflare 令牌、配好助手、导入以前的记忆，最后交给你一个地址、一把 API Key 和要选的模型名，填进聊天软件就能用。你要准备一个 Cloudflare 账号（免费）和一个模型的 key；自己动手的只有在浏览器里点「允许」（新装两次），和把模型的 key 存进 Cloudflare 后台（它会告诉你去哪儿填）。
 
 推荐 **API 模式加 MCP 连接器**：聊天经过 Aelios，每句话自动记、自动想起来；再接上 MCP，助手还能主动查、主动记。只有 Claude 订阅、没有 API 的，才只用 MCP。
 
