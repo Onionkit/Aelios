@@ -106,19 +106,7 @@ cf ai-gateway gateways create --id default --authentication true \
 
 中转站、下拉列表里没有的厂商，先跳到下面「自定义 provider」那段。
 
-两种办法，让用户挑。这一步你别碰 key。
-
-**A. 在 Cloudflare 后台点。** 把这个链接给用户：<https://dash.cloudflare.com/?to=/:account/ai/ai-gateway>。进 `default` → **Provider Keys** → **Add API Key**，选厂商、粘贴 key，别名填 `default`，保存。
-
-**B. 在用户自己的终端里跑。** 把下面这条给用户，让用户自己粘贴、自己跑（`deepseek` 换成对应厂商）。key 输入时不显示，也不会留在命令历史里：
-
-```bash
-read -rs -p "粘贴 key 后回车：" K && echo \
-  && cf ai-gateway gateways providers create default --provider-slug deepseek --alias default --default-config true --secret "$K" >/dev/null \
-  && echo 已存; unset K
-```
-
-常见厂商的写法：`deepseek`、`openai`、`anthropic`、`google-ai-studio`、`openrouter`。别的厂商看后台的下拉列表。
+这一步用户在 Cloudflare 后台自己点，你别碰 key。把这个链接给用户：<https://dash.cloudflare.com/?to=/:account/ai/ai-gateway>，告诉用户：进 `default` → **Provider Keys** → **Add API Key**，选厂商、粘贴 key，别名填 `default`，保存。
 
 用户说存好了，你确认一下（只看有没有，看不到 key 本身）：
 
@@ -138,7 +126,7 @@ AI Gateway 可以自定义 provider，中转站和没内置的厂商都这样接
 
    `--enable true` 一定要带，不带建出来是停用的。
 
-2. **用户存 key**：后台 `default` → **Provider Keys** → **Add API Key**，下拉里选刚建的这个 provider，别名填 `default`。在终端里存的话，`--provider-slug` 写 `custom-<slug>`；报错就改回后台存。
+2. **用户存 key**：后台 `default` → **Provider Keys** → **Add API Key**，下拉里选刚建的这个 provider，别名填 `default`。
 
 3. 模型名一律写成 `custom-<slug>/<那家的模型名>`，比如 `custom-kimi/kimi-for-coding`。
 
@@ -198,7 +186,9 @@ curl -s <Worker 地址>/api/gateway/spaces -H "Authorization: Bearer <钥匙>"
 
 新助手的 `namespace` 填记忆最多的那个，一般是 `default`。MCP 连接器写的也是 `default`，这样 API 和 MCP 用的是同一份记忆。
 
-模型名：BYOK 一律写成 `厂商/模型`，比如 `deepseek/deepseek-chat`、`openai/gpt-5`、`google-ai-studio/gemini-2.5-pro`。拿不准就让用户在厂商文档里确认模型名，前面加上第 3 步的厂商写法。自定义 provider 写成 `custom-<slug>/<模型名>`。
+**主模型用通配符，别写死。** `models` 里可以用 `*`，不分大小写，对上完整名字或最后一个 `/` 后面那段都算。比如 `*deepseek*` 管住 DeepSeek 所有型号，`*kimi*` 管住 Kimi，用户以后换型号不用回来改。只有对得上的模型会记、会召回；别写成单独一个 `*`，那样 Claude Code 后台的小模型调用也会被记进去。
+
+**交给用户的模型名才要具体**（第 7 步用）：内置厂商写成 `厂商/模型`，比如 `deepseek/deepseek-chat`、`openai/gpt-5`、`google-ai-studio/gemini-2.5-pro`；自定义 provider 写成 `custom-<slug>/<模型名>`，比如 `custom-kimi/kimi-for-coding`。拿不准就让用户在厂商文档里确认。
 
 然后 PATCH。**`identities` 是整份替换的**：第 2 步拿到的配置里已经有助手的，把它们原样放进列表，再加新的这个。
 
@@ -209,13 +199,12 @@ curl -sS -X PATCH <Worker 地址>/api/gateway/config \
     "upstream": { "address": "<账号 ID>" },
     "identities": [
       { "slug": "daily", "namespace": "default", "keys": ["CHATBOX_API_KEY"],
-        "models": ["deepseek/deepseek-chat"],
+        "models": ["*deepseek*"],
         "userName": "<用户的称呼>", "assistantName": "<助手的名字>" }
     ]
   }'
 ```
 
-- `models` 只放用户真正拿来聊天的主模型。只有它们会记、会召回，别的模型路过不记。
 - 用户没给称呼，就把 `userName`、`assistantName` 整项删掉。
 - `upstream` 已经是对的就整项不写；写了会覆盖。
 
