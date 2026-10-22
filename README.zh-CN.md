@@ -180,6 +180,10 @@ https://<Worker 地址>/mcp?token=<CHATBOX_API_KEY>
 
 导盲犬只转述图片，不写记忆。
 
+**住在 Cloudflare 里的伴侣：[Aelios-resident](https://github.com/wusaki0723/Aelios-resident)**
+
+另一个 Worker（一个 Durable Object，基于 Cloudflare 的 Think），在 Telegram 和它自己的网页上跟你聊，两边是同一段对话。接上 Aelios 后，它的聊天跟别的客户端一样从你助手的 `/v1` 过，想起旧事、记下来都由 Aelios 做；它还会用记忆工具，搜网搜到的长期知识存进世界知识。另外：你停下来一阵，它给之后的自己写交接信；到点主动找你；搜网、读网页；接别的 MCP；模型、人设和设置都在它的网页上改。Workers 免费档就能跑。接法是在它的设置页填这个 Aelios 的地址、key 和用哪个助手聊（选的模型要在那个助手的主模型里），部署看它的 README。
+
 ## 最容易踩的坑
 
 - 部署用 `npm run deploy`，不要裸 `wrangler deploy`。
@@ -271,7 +275,7 @@ AGPL-3.0
 
 可自由使用、修改；若把修改后的版本对外提供网络服务，须以相同许可开源修改后的源码。
 
-v1 最终封存点在 tag `v1-final`（当时仍是 MIT）。`tg-bot` 是 Telegram 集成分支，截至 2026-09-11 停在 2026-07-16，之后 main 领先它 154 个 commit（135 个文件、约 1.8 万行改动），分支自己只加了 17 个文件，按现状合不回去。留着当历史看；要捡回来得先 rebase 到 main，别直接合。
+v1 最终封存点在 tag `v1-final`（当时仍是 MIT）。`tg-bot` 是 Telegram 集成分支，截至 2026-09-11 停在 2026-07-16，之后 main 领先它 154 个 commit（135 个文件、约 1.8 万行改动），分支自己只加了 17 个文件，按现状合不回去。留着当历史看；要捡回来得先 rebase 到 main，别直接合。现在想在 Telegram 上聊，用 [Aelios-resident](https://github.com/wusaki0723/Aelios-resident)。
 
 ## 交流
 
